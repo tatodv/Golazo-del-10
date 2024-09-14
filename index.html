@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golazo del 10</title>
+    <!-- Fuente desde Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        /* Estilos generales */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Press Start 2P', cursive;
+            background-color: #75AADB; /* Celeste */
+            color: #fff;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-color: #75AADB; /* Celeste */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+        }
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .button {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 1.2em;
+            padding: 15px 30px;
+            margin: 10px;
+            cursor: pointer;
+            background-color: #75AADB; /* Celeste */
+            color: #fff;
+            border: 2px solid #FFFFFF;
+            border-radius: 5px;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+        .button:hover {
+            background-color: #FFFFFF;
+            color: #75AADB;
+            transform: scale(1.05);
+        }
+        #title {
+            font-size: 3em;
+            color: #FFFFFF;
+            text-shadow: 3px 3px #000;
+            margin-bottom: 30px;
+            animation: pulsate 1.5s infinite alternate;
+        }
+        @keyframes pulsate {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.05); }
+        }
+        #scoreCounter, #levelIndicator {
+            position: absolute;
+            font-size: 1.2em;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.6);
+            border-radius: 5px;
+        }
+        #scoreCounter { top: 10px; right: 10px; }
+        #levelIndicator { top: 10px; left: 10px; }
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2em;
+            color: #FFFFFF;
+            text-shadow: 2px 2px #000;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            font-size: 0.8em;
+            text-align: left;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        /* Estilos para los créditos */
+        #credits {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            font-size: 0.8em;
+            color: #FFFFFF;
+            text-shadow: 1px 1px #000;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="scoreCounter">Goles: 0</div>
+        <div id="levelIndicator">Nivel: 1</div>
+        <div id="message"></div>
+        <div id="controls">
+            Controles:<br>
+            Mueve el ratón para mover al jugador<br>
+            Clic: Patear<br>
+            P: Pausa
+        </div>
+        <!-- Mensaje de créditos -->
+        <div id="credits">Creación de Tato Vergara</div>
+        <div id="menuOverlay" class="overlay">
+            <div id="title">Golazo del 10</div>
+            <button id="startButton" class="button">Iniciar Juego</button>
+            <button id="instructionsButton" class="button">Instrucciones</button>
+        </div>
+        <div id="pauseOverlay" class="overlay" style="display: none;">
+            <h2>Juego Pausado</h2>
+            <button id="resumeButton" class="button">Reanudar</button>
+            <button id="quitButton" class="button">Salir al Menú</button>
+        </div>
+        <div id="gameOverOverlay" class="overlay" style="display: none;">
+            <h2>¡Fin del Juego!</h2>
+            <div id="finalScore"></div>
+            <button id="restartButton" class="button">Jugar de Nuevo</button>
+            <button id="menuButton" class="button">Menú Principal</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuración del juego
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let gameLoopId;
+        let gameState = 'menu';
+        let score = 0;
+        let level = 1;
+        let gameTime = 60; // 60 segundos de juego
+
+        // Ajustar el tamaño del canvas
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Cargar imágenes
+        const images = {
+            background: new Image(),
+            player: new Image(),
+            opponent: new Image(),
+            ball: new Image()
+        };
+        let imagesLoaded = 0;
+
+        images.background.onload = imageLoaded;
+        images.player.onload = imageLoaded;
+        images.opponent.onload = imageLoaded;
+        images.ball.onload = imageLoaded;
+
+        images.background.src = 'https://i.ibb.co/XFb3xZc/aidan-yelamos-berbel-footballnight.gif'; // Fondo personalizado
+        images.player.src = 'https://i.ibb.co/ysXpqQY/maradona.png'; // Tu imagen de Maradona
+        images.opponent.src = 'https://i.ibb.co/SwtrBtw/pele.png'; // Tu imagen de Pelé
+        images.ball.src = 'https://i.ibb.co/RNRwxkM/pixel-art-soccer-ball-icon-2-png.webp'; // Pelota
+
+        function imageLoaded() {
+            imagesLoaded++;
+            if (imagesLoaded === 4) {
+                initGame();
+            }
+        }
+
+        // Objetos del juego
+        let player = { x: 100, y: 300, width: 50, height: 50 };
+        let opponent = { x: canvas.width - 150, y: canvas.height / 2 - 25, width: 50, height: 50 };
+        let ball = { x: -100, y: -100, radius: 15, speed: 8, active: false, vx: 0, vy: 0 };
+
+        // Control de entrada
+        let mouseX = canvas.width / 2, mouseY = canvas.height / 2;
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener('click', shootBall);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyP') {
+                if (gameState === 'playing') {
+                    pauseGame();
+                } else if (gameState === 'paused') {
+                    resumeGame();
+                }
+            }
+        });
+
+        // Inicialización del juego
+        function initGame() {
+            document.getElementById('startButton').addEventListener('click', startGame);
+            document.getElementById('instructionsButton').addEventListener('click', showInstructions);
+            document.getElementById('resumeButton').addEventListener('click', resumeGame);
+            document.getElementById('quitButton').addEventListener('click', quitToMenu);
+            document.getElementById('restartButton').addEventListener('click', restartGame);
+            document.getElementById('menuButton').addEventListener('click', quitToMenu);
+
+            resetPositions();
+            gameLoopId = requestAnimationFrame(update);
+        }
+
+        function startGame() {
+            gameState = 'playing';
+            score = 0;
+            level = 1;
+            gameTime = 60;
+            resetPositions();
+            document.getElementById('menuOverlay').style.display = 'none';
+            updateScore();
+            updateLevel();
+        }
+
+        function pauseGame() {
+            gameState = 'paused';
+            document.getElementById('pauseOverlay').style.display = 'flex';
+        }
+
+        function resumeGame() {
+            gameState = 'playing';
+            document.getElementById('pauseOverlay').style.display = 'none';
+        }
+
+        function quitToMenu() {
+            gameState = 'menu';
+            document.getElementById('pauseOverlay').style.display = 'none';
+            document.getElementById('gameOverOverlay').style.display = 'none';
+            document.getElementById('menuOverlay').style.display = 'flex';
+        }
+
+        function showInstructions() {
+            alert("Instrucciones:\n\n- Mueve el ratón para mover al jugador\n- Haz clic para patear la pelota\n- Anota goles pasando al oponente\n- Tienes 60 segundos para anotar la mayor cantidad de goles\n- Presiona 'P' para pausar el juego");
+        }
+
+        function restartGame() {
+            startGame();
+        }
+
+        function resetPositions() {
+            player.x = 100;
+            player.y = canvas.height / 2 - player.height / 2;
+            opponent.x = canvas.width - 150;
+            opponent.y = canvas.height / 2 - opponent.height / 2;
+            ball.active = false;
+            ball.x = player.x + player.width;
+            ball.y = player.y + player.height / 2;
+            ball.vx = 0;
+            ball.vy = 0;
+        }
+
+        function shootBall() {
+            if (gameState !== 'playing' || ball.active) return;
+
+            const dx = mouseX - ball.x;
+            const dy = mouseY - ball.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            ball.active = true;
+            ball.vx = (dx / distance) * ball.speed;
+            ball.vy = (dy / distance) * ball.speed;
+        }
+
+        function update() {
+            if (gameState === 'playing') {
+                updateGame();
+                render();
+
+                gameTime -= 1 / 60; // Reducir el tiempo (asumiendo 60 FPS)
+                if (gameTime <= 0) {
+                    endGame();
+                }
+            }
+
+            gameLoopId = requestAnimationFrame(update);
+        }
+
+        function updateGame() {
+            // Mover al jugador hacia el mouse
+            player.x += (mouseX - player.x - player.width / 2) * 0.1;
+            player.y += (mouseY - player.y - player.height / 2) * 0.1;
+
+            // Mantener al jugador dentro del canvas
+            player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+            player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
+
+            // Actualizar la pelota
+            if (ball.active) {
+                ball.x += ball.vx;
+                ball.y += ball.vy;
+
+                // Colisión con los bordes superior e inferior
+                if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) {
+                    ball.vy = -ball.vy;
+                }
+
+                // Gol
+                if (ball.x + ball.radius > canvas.width) {
+                    score++;
+                    updateScore();
+                    showMessage("¡GOL!");
+                    levelUp();
+                    resetPositions();
+                }
+
+                // Oponente ataja
+                if (checkCollision(ball, opponent)) {
+                    showMessage("¡El oponente atajó!");
+                    resetPositions();
+                }
+
+                // Pelota fuera del campo por la izquierda
+                if (ball.x + ball.radius < 0) {
+                    resetPositions();
+                }
+            }
+
+            // Mover al oponente
+            const targetY = ball.active ? ball.y : canvas.height / 2 - opponent.height / 2;
+            opponent.y += (targetY - opponent.y) * 0.05 * level;
+
+            // Mantener al oponente dentro del canvas
+            opponent.y = Math.max(0, Math.min(canvas.height - opponent.height, opponent.y));
+        }
+
+        function render() {
+            // Limpiar el canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Dibujar el fondo
+            ctx.drawImage(images.background, 0, 0, canvas.width, canvas.height);
+
+            // Dibujar al jugador
+            ctx.drawImage(images.player, player.x, player.y, player.width, player.height);
+
+            // Dibujar al oponente
+            ctx.drawImage(images.opponent, opponent.x, opponent.y, opponent.width, opponent.height);
+
+            // Dibujar la pelota
+            if (ball.active) {
+                ctx.drawImage(images.ball, ball.x - ball.radius, ball.y - ball.radius, ball.radius * 2, ball.radius * 2);
+            }
+
+            // Dibujar el tiempo restante
+            ctx.fillStyle = 'white';
+            ctx.font = '20px "Press Start 2P"';
+            ctx.fillText(`Tiempo: ${Math.ceil(gameTime)}`, canvas.width / 2 - 80, 30);
+        }
+
+        function checkCollision(ball, entity) {
+            return ball.x + ball.radius > entity.x &&
+                   ball.x - ball.radius < entity.x + entity.width &&
+                   ball.y + ball.radius > entity.y &&
+                   ball.y - ball.radius < entity.y + entity.height;
+        }
+
+        function updateScore() {
+            document.getElementById('scoreCounter').innerText = `Goles: ${score}`;
+        }
+
+        function updateLevel() {
+            document.getElementById('levelIndicator').innerText = `Nivel: ${level}`;
+        }
+
+        function levelUp() {
+            if (score % 5 === 0) {
+                level++;
+                updateLevel();
+                showMessage("¡Nivel Aumentado!", 2000);
+            }
+        }
+
+        function showMessage(text, duration = 1000) {
+            const messageElement = document.getElementById('message');
+            messageElement.innerText = text;
+            messageElement.style.opacity = 1;
+            setTimeout(() => {
+                messageElement.style.opacity = 0;
+            }, duration);
+        }
+
+        function endGame() {
+            gameState = 'gameOver';
+            document.getElementById('gameOverOverlay').style.display = 'flex';
+            document.getElementById('finalScore').innerText = `Puntuación Final: ${score}`;
+        }
+
+        // Iniciar el juego
+        initGame();
+    </script>
+</body>
+</html>
